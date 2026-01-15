@@ -6,6 +6,11 @@ import (
 	"github.com/zeromicro/go-zero/core/service"
 )
 
+type Cfg struct {
+	Endpoint string
+	Tube     string
+}
+
 type MessageListener func(meta EventMata, data []byte)
 
 type Consumer interface {

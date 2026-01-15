@@ -1,19 +1,19 @@
-package main
+package producer
 
 import (
 	"fmt"
-	"github.com/pudonghot/delay-queue/producer"
 	"strconv"
+	"testing"
 	"time"
 )
 
-func main() {
+func TestProducer(t *testing.T) {
 	send("TEST_TUBE")
 	send("TEST_TUBE2")
 }
 
 func send(tube string) {
-	producer := producer.NewProducerNode("172.16.8.11:11300", tube)
+	producer := NewProducerNode("172.16.8.11:11300", tube)
 
 	var revokeId string
 	for i := 1000; i < 1005; i++ {
