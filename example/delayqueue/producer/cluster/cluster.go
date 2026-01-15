@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/zeromicro/go-queue/delayqueue/consumer"
+	"github.com/zeromicro/go-queue/delayqueue/producer"
 	"strconv"
 	"time"
-
-	"github.com/zeromicro/go-queue/delayqueue"
 )
 
 func main() {
-	producer := delayqueue.NewProducer([]delayqueue.Beanstalk{
+	producer := producer.NewProducer([]consumer.Cfg{
 		{
 			Endpoint: "172.16.8.11:11300",
 			Tube:     "TEST_TUBE",

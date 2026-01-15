@@ -1,4 +1,4 @@
-package delayqueue
+package conn
 
 import (
 	"sync"
@@ -6,21 +6,21 @@ import (
 	"github.com/beanstalkd/go-beanstalk"
 )
 
-type connection struct {
+type Conn struct {
 	lock     sync.RWMutex
 	endpoint string
 	tube     string
 	conn     *beanstalk.Conn
 }
 
-func newConnection(endpint, tube string) *connection {
-	return &connection{
-		endpoint: endpint,
+func NewConn(endpoint string, tube string) *Conn {
+	return &Conn{
+		endpoint: endpoint,
 		tube:     tube,
 	}
 }
 
-func (c *connection) Close() error {
+func (c *Conn) Close() error {
 	c.lock.Lock()
 	conn := c.conn
 	c.conn = nil
@@ -33,7 +33,7 @@ func (c *connection) Close() error {
 	return nil
 }
 
-func (c *connection) get() (*beanstalk.Conn, error) {
+func (c *Conn) Get() (*beanstalk.Conn, error) {
 	c.lock.RLock()
 	conn := c.conn
 	c.lock.RUnlock()
@@ -55,7 +55,7 @@ func (c *connection) get() (*beanstalk.Conn, error) {
 	return c.conn, err
 }
 
-func (c *connection) reset() {
+func (c *Conn) Reset() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

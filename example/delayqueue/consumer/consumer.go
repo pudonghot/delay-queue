@@ -1,13 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"github.com/zeromicro/go-queue/delayqueue"
+	log "github.com/sirupsen/logrus"
+	"github.com/zeromicro/go-queue/delayqueue/consumer"
 )
 
 func main() {
-	consumer := delayqueue.NewConsumer(delayqueue.DqConf{
-		Beanstalks: []delayqueue.Beanstalk{
+	c := consumer.NewConsumer(
+		[]consumer.Cfg{
 			{
 				Endpoint: "172.16.8.11:11300",
 				Tube:     "TEST_TUBE",
@@ -17,8 +17,9 @@ func main() {
 				Tube:     "TEST_TUBE2",
 			},
 		},
-	})
-	consumer.Consume(func(body []byte) {
-		fmt.Println(string(body))
+	)
+
+	c.OnMessage(func(meta consumer.EventMata, body []byte) {
+		log.Printf("endpoint [%s] tube [%s] message [%s].", meta.Endpoint, meta.Tube, string(body))
 	})
 }

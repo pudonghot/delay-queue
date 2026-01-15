@@ -1,6 +1,8 @@
-package delayqueue
+package producer
 
 import (
+	"github.com/zeromicro/go-queue/delayqueue/consumer"
+	"github.com/zeromicro/go-queue/delayqueue/util"
 	"math/rand"
 	"strings"
 	"time"
@@ -28,7 +30,7 @@ type (
 		delay(body []byte, delay time.Duration) (string, error)
 	}
 
-	producerCluster struct {
+	cluster struct {
 		nodes []Producer
 	}
 )
@@ -40,7 +42,7 @@ func init() {
 	rng = rand.New(source)
 }
 
-func NewProducer(beanstalks []Beanstalk) Producer {
+func NewProducer(beanstalks []consumer.Cfg) Producer {
 	if len(beanstalks) < minWrittenNodes {
 		log.Fatalf("nodes must be equal or greater than %d", minWrittenNodes)
 	}
@@ -56,19 +58,22 @@ func NewProducer(beanstalks []Beanstalk) Producer {
 		nodes = append(nodes, NewProducerNode(node.Endpoint, node.Tube))
 	}
 
-	return &producerCluster{nodes: nodes}
+	return &cluster{nodes: nodes}
 }
 
-func (p *producerCluster) Put(body []byte) (string, error) {
+func (p *cluster) Put(body []byte) (string, error) {
 	return p.Delay(body, 0)
 }
 
-func (p *producerCluster) At(body []byte, at time.Time) (string, error) {
-	wrapped := wrap(body, at)
-	return p.at(wrapped, at)
+func (p *cluster) At(data []byte, at time.Time) (string, error) {
+	msg, err := util.Wrap(data, at)
+	if err != nil {
+		return "", nil
+	}
+	return p.at(msg, at)
 }
 
-func (p *producerCluster) Close() error {
+func (p *cluster) Close() error {
 	var be errorx.BatchError
 	for _, node := range p.nodes {
 		if err := node.Close(); err != nil {
@@ -78,12 +83,15 @@ func (p *producerCluster) Close() error {
 	return be.Err()
 }
 
-func (p *producerCluster) Delay(body []byte, delay time.Duration) (string, error) {
-	wrapped := wrap(body, time.Now().Add(delay))
-	return p.delay(wrapped, delay)
+func (p *cluster) Delay(data []byte, delay time.Duration) (string, error) {
+	msg, err := util.Wrap(data, time.Now().Add(delay))
+	if err != nil {
+		return "", err
+	}
+	return p.delay(msg, delay)
 }
 
-func (p *producerCluster) Revoke(ids string) error {
+func (p *cluster) Revoke(ids string) error {
 	var be errorx.BatchError
 
 	fx.From(func(source chan<- interface{}) {
@@ -102,23 +110,23 @@ func (p *producerCluster) Revoke(ids string) error {
 	return be.Err()
 }
 
-func (p *producerCluster) at(body []byte, at time.Time) (string, error) {
+func (p *cluster) at(body []byte, at time.Time) (string, error) {
 	return p.insert(func(node Producer) (string, error) {
 		return node.at(body, at)
 	})
 }
 
-func (p *producerCluster) cloneNodes() []Producer {
+func (p *cluster) cloneNodes() []Producer {
 	return append([]Producer(nil), p.nodes...)
 }
 
-func (p *producerCluster) delay(body []byte, delay time.Duration) (string, error) {
+func (p *cluster) delay(body []byte, delay time.Duration) (string, error) {
 	return p.insert(func(node Producer) (string, error) {
 		return node.delay(body, delay)
 	})
 }
 
-func (p *producerCluster) getWriteNodes() []Producer {
+func (p *cluster) getWriteNodes() []Producer {
 	if len(p.nodes) <= replicaNodes {
 		return p.nodes
 	}
@@ -130,7 +138,7 @@ func (p *producerCluster) getWriteNodes() []Producer {
 	return nodes[:replicaNodes]
 }
 
-func (p *producerCluster) insert(fn func(node Producer) (string, error)) (string, error) {
+func (p *cluster) insert(fn func(node Producer) (string, error)) (string, error) {
 	type idErr struct {
 		id  string
 		err error
