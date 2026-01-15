@@ -3,8 +3,8 @@ package producer
 import (
 	"errors"
 	"fmt"
-	"github.com/pudonghot/delay-queue/delayqueue/conn"
-	"github.com/pudonghot/delay-queue/delayqueue/util"
+	"github.com/pudonghot/delay-queue/conn"
+	"github.com/pudonghot/delay-queue/util"
 	"strconv"
 	"strings"
 	"time"

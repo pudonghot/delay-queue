@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/pudonghot/delay-queue/delayqueue/producer"
+	"github.com/pudonghot/delay-queue/producer"
 	"strconv"
 	"time"
 )

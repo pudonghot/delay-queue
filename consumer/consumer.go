@@ -1,7 +1,7 @@
 package consumer
 
 import (
-	"github.com/pudonghot/delay-queue/delayqueue/util"
+	"github.com/pudonghot/delay-queue/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/zeromicro/go-zero/core/service"
 )

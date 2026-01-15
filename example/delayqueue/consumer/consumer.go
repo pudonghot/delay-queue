@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/pudonghot/delay-queue/delayqueue/consumer"
+	consumer2 "github.com/pudonghot/delay-queue/consumer"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	c := consumer.NewConsumer(
-		[]consumer.Cfg{
+	c := consumer2.NewConsumer(
+		[]consumer2.Cfg{
 			{
 				Endpoint: "172.16.8.11:11300",
 				Tube:     "TEST_TUBE",
@@ -19,7 +19,7 @@ func main() {
 		},
 	)
 
-	c.OnMessage(func(meta consumer.EventMata, data []byte) {
+	c.OnMessage(func(meta consumer2.EventMata, data []byte) {
 		log.Printf("endpoint [%s] tube [%s] message [%s].", meta.Endpoint, meta.Tube, string(data))
 	})
 }

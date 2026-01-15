@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"errors"
-	"github.com/pudonghot/delay-queue/delayqueue/conn"
+	"github.com/pudonghot/delay-queue/conn"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
