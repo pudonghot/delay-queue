@@ -1,4 +1,4 @@
-module github.com/zeromicro/go-queue
+module github.com/pudonghot/delay-queue
 
 go 1.25
 

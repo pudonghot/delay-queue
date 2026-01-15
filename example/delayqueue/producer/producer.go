@@ -2,13 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/zeromicro/go-queue/delayqueue/producer"
+	"github.com/pudonghot/delay-queue/delayqueue/producer"
 	"strconv"
 	"time"
 )
 
 func main() {
-	producer := producer.NewProducerNode("172.16.8.11:11300", "TEST_TUBE")
+	send("TEST_TUBE")
+	send("TEST_TUBE2")
+}
+
+func send(tube string) {
+	producer := producer.NewProducerNode("172.16.8.11:11300", tube)
 
 	var revokeId string
 	for i := 1000; i < 1005; i++ {

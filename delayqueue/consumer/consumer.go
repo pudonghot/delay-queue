@@ -1,12 +1,12 @@
 package consumer
 
 import (
+	"github.com/pudonghot/delay-queue/delayqueue/util"
 	log "github.com/sirupsen/logrus"
-	"github.com/zeromicro/go-queue/delayqueue/util"
 	"github.com/zeromicro/go-zero/core/service"
 )
 
-type MessageListener func(meta EventMata, body []byte)
+type MessageListener func(meta EventMata, data []byte)
 
 type Consumer interface {
 	OnMessage(listener MessageListener)
@@ -36,7 +36,7 @@ func (c *Cluster) OnMessage(listener MessageListener) {
 					log.Errorf("unwrap message error: %v\n", err)
 					return
 				}
-				listener(EventMata{Endpoint: node.endpoint, Tube: node.tube}, msg)
+				listener(EventMata{Endpoint: node.conn.Endpoint, Tube: node.conn.Tube}, msg)
 			},
 		})
 	}

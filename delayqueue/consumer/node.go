@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"errors"
-	"github.com/zeromicro/go-queue/delayqueue/conn"
+	"github.com/pudonghot/delay-queue/delayqueue/conn"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
@@ -11,14 +11,12 @@ import (
 )
 
 const (
-	reserveTimeout = time.Second * 5
+	reserveTimeout = time.Second * 6
 )
 
 type Node struct {
-	endpoint string
-	tube     string
-	conn     *conn.Conn
-	on       *syncx.AtomicBool
+	conn *conn.Conn
+	on   *syncx.AtomicBool
 }
 
 type Service struct {
@@ -33,10 +31,8 @@ type EventMata struct {
 
 func newConsumerNode(endpoint string, tube string) *Node {
 	return &Node{
-		endpoint: endpoint,
-		tube:     tube,
-		conn:     conn.NewConn(endpoint, tube),
-		on:       syncx.ForAtomicBool(true),
+		conn: conn.NewConn(endpoint, tube),
+		on:   syncx.ForAtomicBool(true),
 	}
 }
 
@@ -44,7 +40,7 @@ func (c *Node) dispose() {
 	c.on.Set(false)
 }
 
-func (c *Node) consumeEvents(listener MessageListener) {
+func (c *Node) consume(listener MessageListener) {
 	for c.on.True() {
 		conn, err := c.conn.Get()
 		if err != nil {
@@ -55,19 +51,17 @@ func (c *Node) consumeEvents(listener MessageListener) {
 
 		// because getting conn takes at most one second, reserve tasks at most 5 seconds,
 		// if don't check on/off here, the conn might not be closed due to
-		// graceful shutdon waits at most 5.5 seconds.
+		// graceful shutdown waits at most 5.5 seconds.
 		if !c.on.True() {
 			break
 		}
 
-		conn.Tube.Name = c.tube
-		conn.TubeSet.Name[c.tube] = true
 		id, body, err := conn.Reserve(reserveTimeout)
 		if err == nil {
 			conn.Delete(id)
 			listener(EventMata{
-				Endpoint: c.endpoint,
-				Tube:     c.tube,
+				Endpoint: c.conn.Endpoint,
+				Tube:     c.conn.Tube,
 			}, body)
 			continue
 		}
@@ -111,7 +105,7 @@ func (c *Node) consumeEvents(listener MessageListener) {
 }
 
 func (cs Service) Start() {
-	cs.node.consumeEvents(cs.listener)
+	cs.node.consume(cs.listener)
 }
 
 func (cs Service) Stop() {

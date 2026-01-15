@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/pudonghot/delay-queue/delayqueue/consumer"
 	log "github.com/sirupsen/logrus"
-	"github.com/zeromicro/go-queue/delayqueue/consumer"
 )
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 		},
 	)
 
-	c.OnMessage(func(meta consumer.EventMata, body []byte) {
-		log.Printf("endpoint [%s] tube [%s] message [%s].", meta.Endpoint, meta.Tube, string(body))
+	c.OnMessage(func(meta consumer.EventMata, data []byte) {
+		log.Printf("endpoint [%s] tube [%s] message [%s].", meta.Endpoint, meta.Tube, string(data))
 	})
 }

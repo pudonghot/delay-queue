@@ -7,23 +7,24 @@ import (
 )
 
 type Conn struct {
-	lock     sync.RWMutex
-	endpoint string
-	tube     string
-	conn     *beanstalk.Conn
+	Endpoint string
+	Tube     string
+	Conn     *beanstalk.Conn
+
+	lock sync.RWMutex
 }
 
 func NewConn(endpoint string, tube string) *Conn {
 	return &Conn{
-		endpoint: endpoint,
-		tube:     tube,
+		Endpoint: endpoint,
+		Tube:     tube,
 	}
 }
 
 func (c *Conn) Close() error {
 	c.lock.Lock()
-	conn := c.conn
-	c.conn = nil
+	conn := c.Conn
+	c.Conn = nil
 	defer c.lock.Unlock()
 
 	if conn != nil {
@@ -35,7 +36,7 @@ func (c *Conn) Close() error {
 
 func (c *Conn) Get() (*beanstalk.Conn, error) {
 	c.lock.RLock()
-	conn := c.conn
+	conn := c.Conn
 	c.lock.RUnlock()
 
 	if conn != nil {
@@ -46,21 +47,23 @@ func (c *Conn) Get() (*beanstalk.Conn, error) {
 	defer c.lock.Unlock()
 
 	var err error
-	c.conn, err = beanstalk.Dial("tcp", c.endpoint)
+	c.Conn, err = beanstalk.Dial("tcp", c.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	c.conn.Tube.Name = c.tube
-	return c.conn, err
+	c.Conn.Tube.Name = c.Tube
+	c.Conn.TubeSet.Name[c.Tube] = true
+
+	return c.Conn, err
 }
 
 func (c *Conn) Reset() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
+	if c.Conn != nil {
+		c.Conn.Close()
+		c.Conn = nil
 	}
 }

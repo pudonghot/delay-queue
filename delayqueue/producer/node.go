@@ -3,8 +3,8 @@ package producer
 import (
 	"errors"
 	"fmt"
-	"github.com/zeromicro/go-queue/delayqueue/conn"
-	"github.com/zeromicro/go-queue/delayqueue/util"
+	"github.com/pudonghot/delay-queue/delayqueue/conn"
+	"github.com/pudonghot/delay-queue/delayqueue/util"
 	"strconv"
 	"strings"
 	"time"
@@ -20,11 +20,18 @@ const (
 	PriNormal = 2
 	PriLow    = 3
 
-	defaultTimeToRun = time.Second * 5
-	reserveTimeout   = time.Second * 5
-
-	idSep = ","
+	defaultTimeToRun = time.Second * 6
 )
+
+type Producer interface {
+	Put(data []byte) (string, error)
+	At(data []byte, at time.Time) (string, error)
+	Delay(data []byte, delay time.Duration) (string, error)
+	Revoke(id string) error
+	Close() error
+
+	delay(data []byte, delay time.Duration) (string, error)
+}
 
 type node struct {
 	endpoint string
@@ -49,7 +56,14 @@ func (p *node) At(body []byte, at time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return p.at(msg, at)
+
+	now := time.Now()
+	if at.Before(now) {
+		return "", ErrTimeBeforeNow
+	}
+
+	duration := at.Sub(now)
+	return p.delay(msg, duration)
 }
 
 func (p *node) Close() error {
@@ -64,41 +78,27 @@ func (p *node) Delay(data []byte, delay time.Duration) (string, error) {
 	return p.delay(msg, delay)
 }
 
-func (p *node) Revoke(ids string) error {
-	for _, id := range strings.Split(ids, idSep) {
-		fields := strings.Split(id, "/")
-		if len(fields) < 3 {
-			continue
-		}
-		if fields[0] != p.endpoint || fields[1] != p.tube {
-			continue
-		}
-
-		conn, err := p.conn.Get()
-		if err != nil {
-			return err
-		}
-
-		n, err := strconv.ParseUint(fields[2], 10, 64)
-		if err != nil {
-			return err
-		}
-
-		return conn.Delete(n)
+func (p *node) Revoke(id string) error {
+	fields := strings.Split(id, "/")
+	if len(fields) != 3 {
+		return fmt.Errorf("invalid format of message id: %s", id)
 	}
 
-	// if not in this beanstalk, ignore
-	return nil
-}
-
-func (p *node) at(data []byte, at time.Time) (string, error) {
-	now := time.Now()
-	if at.Before(now) {
-		return "", ErrTimeBeforeNow
+	if fields[0] != p.endpoint || fields[1] != p.tube {
+		return fmt.Errorf("invalid message id: [%s]", id)
 	}
 
-	duration := at.Sub(now)
-	return p.delay(data, duration)
+	conn, err := p.conn.Get()
+	if err != nil {
+		return err
+	}
+
+	n, err := strconv.ParseUint(fields[2], 10, 64)
+	if err != nil {
+		return err
+	}
+
+	return conn.Delete(n)
 }
 
 func (p *node) delay(data []byte, delay time.Duration) (string, error) {
