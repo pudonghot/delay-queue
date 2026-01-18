@@ -36,6 +36,6 @@ func TestConsumer(t *testing.T) {
 		return nil
 	})
 	c.Start()
-	time.Sleep(time.Minute * 2)
-	c.Stop()
+	done := make(chan string, 1)
+	<-done
 }

@@ -10,6 +10,12 @@ import (
 	log "log/slog"
 )
 
+const (
+	PriHigh   = 1
+	PriNormal = 2
+	PriLow    = 3
+)
+
 type Node struct {
 	conn           *conn.Conn
 	on             *atomic.Bool
@@ -51,17 +57,17 @@ func (node *Node) listen(listener MessageListener) {
 			break
 		}
 
-		id, body, err := conn.Reserve(node.reserveTimeout)
+		id, data, err := conn.Reserve(node.reserveTimeout)
 		if err == nil {
 			result := listener(EventMata{
 				Endpoint: node.conn.Endpoint,
 				Tube:     node.conn.Tube,
-			}, body)
+			}, data)
 
 			if result != nil {
 				delay := result.ReleaseDelay
 				if delay >= 0 {
-					conn.Release(id, 2, delay)
+					conn.Release(id, PriNormal, delay)
 					continue
 				}
 			}

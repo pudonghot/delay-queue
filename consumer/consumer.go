@@ -44,9 +44,9 @@ func (c *Cluster) OnMessage(listener MessageListener) {
 }
 
 func (c *Cluster) Start() {
-	for _, node := range c.nodes {
+	for _, node0 := range c.nodes {
 		for _, listener := range c.listeners {
-			go func() {
+			go func(node *Node) {
 				node.listen(
 					func(_ EventMata, data []byte) *MsgConsumeResult {
 						msg, err := util.Unwrap(data)
@@ -56,7 +56,7 @@ func (c *Cluster) Start() {
 						}
 						return listener(EventMata{Endpoint: node.conn.Endpoint, Tube: node.conn.Tube}, msg)
 					})
-			}()
+			}(node0)
 		}
 	}
 }

@@ -15,16 +15,16 @@ func TestProducer(t *testing.T) {
 func send(tube string) {
 	producer := NewProducerNode("172.16.8.11:11300", tube)
 
-	var revokeId string
+	var removeId uint64
 	for i := 1000; i < 1005; i++ {
 		msgId, err := producer.Delay([]byte("消息："+strconv.Itoa(i)), time.Second*5)
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Printf("Message: %s\n", msgId)
-		revokeId = msgId
+		fmt.Printf("Message: %d\n", msgId)
+		removeId = msgId
 	}
-	producer.Revoke(revokeId)
+	producer.Remove(removeId)
 
 	producer.Put([]byte("立刻，马上"))
 }

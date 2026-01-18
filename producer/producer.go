@@ -2,12 +2,9 @@ package producer
 
 import (
 	"errors"
-	"fmt"
 	"github.com/pudonghot/delay-queue/conn"
 	"github.com/pudonghot/delay-queue/util"
 	log "log/slog"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
@@ -24,13 +21,13 @@ const (
 )
 
 type Producer interface {
-	Put(data []byte) (string, error)
-	At(data []byte, at time.Time) (string, error)
-	Delay(data []byte, delay time.Duration) (string, error)
-	Revoke(id string) error
+	Put(data []byte) (uint64, error)
+	At(data []byte, at time.Time) (uint64, error)
+	Delay(data []byte, delay time.Duration) (uint64, error)
+	Remove(id uint64) error
 	Close() error
 
-	delay(data []byte, delay time.Duration) (string, error)
+	delay(data []byte, delay time.Duration) (uint64, error)
 }
 
 type node struct {
@@ -47,19 +44,19 @@ func NewProducerNode(endpoint, tube string) Producer {
 	}
 }
 
-func (p *node) Put(body []byte) (string, error) {
+func (p *node) Put(body []byte) (uint64, error) {
 	return p.Delay(body, 0)
 }
 
-func (p *node) At(body []byte, at time.Time) (string, error) {
+func (p *node) At(body []byte, at time.Time) (uint64, error) {
 	msg, err := util.Wrap(body, at)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	now := time.Now()
 	if at.Before(now) {
-		return "", ErrTimeBeforeNow
+		return 0, ErrTimeBeforeNow
 	}
 
 	duration := at.Sub(now)
@@ -70,47 +67,33 @@ func (p *node) Close() error {
 	return p.conn.Close()
 }
 
-func (p *node) Delay(data []byte, delay time.Duration) (string, error) {
+func (p *node) Delay(data []byte, delay time.Duration) (uint64, error) {
 	msg, err := util.Wrap(data, time.Now().Add(delay))
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	return p.delay(msg, delay)
 }
 
-func (p *node) Revoke(id string) error {
-	fields := strings.Split(id, "/")
-	if len(fields) != 3 {
-		return fmt.Errorf("invalid format of message id: %s", id)
-	}
-
-	if fields[0] != p.endpoint || fields[1] != p.tube {
-		return fmt.Errorf("invalid message id: [%s]", id)
-	}
-
+func (p *node) Remove(id uint64) error {
 	conn, err := p.conn.Get()
 	if err != nil {
 		return err
 	}
 
-	n, err := strconv.ParseUint(fields[2], 10, 64)
-	if err != nil {
-		return err
-	}
-
-	return conn.Delete(n)
+	return conn.Delete(id)
 }
 
-func (p *node) delay(data []byte, delay time.Duration) (string, error) {
+func (p *node) delay(data []byte, delay time.Duration) (uint64, error) {
 	conn, err := p.conn.Get()
 	if err != nil {
 		log.Error("Beanstalk conn err", log.Any("error", err))
-		return "", err
+		return 0, err
 	}
 
 	id, err := conn.Put(data, PriNormal, delay, defaultTimeToRun)
 	if err == nil {
-		return fmt.Sprintf("%s/%s/%d", p.endpoint, p.tube, id), nil
+		return id, nil
 	}
 
 	// the error can only be beanstalk.NameError or beanstalk.ConnError
@@ -142,5 +125,5 @@ func (p *node) delay(data []byte, delay time.Duration) (string, error) {
 		log.Error("Beanstalk put err", log.Any("error", err))
 	}
 
-	return "", err
+	return 0, err
 }
