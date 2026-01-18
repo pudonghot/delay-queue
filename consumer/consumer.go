@@ -2,8 +2,8 @@ package consumer
 
 import (
 	"github.com/pudonghot/delay-queue/util"
-	log "github.com/sirupsen/logrus"
-	"github.com/zeromicro/go-zero/core/service"
+	log "log/slog"
+	"time"
 )
 
 type Cfg struct {
@@ -11,39 +11,58 @@ type Cfg struct {
 	Tube     string
 }
 
-type MessageListener func(meta EventMata, data []byte)
+type MsgConsumeResult struct {
+	ReleaseDelay time.Duration
+}
+
+type MessageListener func(meta EventMata, data []byte) *MsgConsumeResult
 
 type Consumer interface {
 	OnMessage(listener MessageListener)
-}
-type Cluster struct {
-	nodes []*Node
+	Start()
+	Stop()
 }
 
-func NewConsumer(cfgs []Cfg) Consumer {
+type Cluster struct {
+	nodes     []*Node
+	listeners []MessageListener
+}
+
+func NewConsumer(cfgs []Cfg, reserveTimeout time.Duration) Consumer {
 	var nodes []*Node
 	for _, node := range cfgs {
-		nodes = append(nodes, newConsumerNode(node.Endpoint, node.Tube))
+		nodes = append(nodes, newConsumerNode(node.Endpoint, node.Tube, reserveTimeout))
 	}
 	return &Cluster{
-		nodes: nodes,
+		nodes:     nodes,
+		listeners: make([]MessageListener, 0),
 	}
 }
 
 func (c *Cluster) OnMessage(listener MessageListener) {
-	group := service.NewServiceGroup()
+	c.listeners = append(c.listeners, listener)
+}
+
+func (c *Cluster) Start() {
 	for _, node := range c.nodes {
-		group.Add(Service{
-			node: node,
-			listener: func(_ EventMata, data []byte) {
-				msg, err := util.Unwrap(data)
-				if err != nil {
-					log.Errorf("unwrap message error: %v\n", err)
-					return
-				}
-				listener(EventMata{Endpoint: node.conn.Endpoint, Tube: node.conn.Tube}, msg)
-			},
-		})
+		for _, listener := range c.listeners {
+			go func() {
+				node.listen(
+					func(_ EventMata, data []byte) *MsgConsumeResult {
+						msg, err := util.Unwrap(data)
+						if err != nil {
+							log.Error("Unwrap message err", log.Any("error", err))
+							return nil
+						}
+						return listener(EventMata{Endpoint: node.conn.Endpoint, Tube: node.conn.Tube}, msg)
+					})
+			}()
+		}
 	}
-	group.Start()
+}
+
+func (c *Cluster) Stop() {
+	for _, node := range c.nodes {
+		node.stop()
+	}
 }

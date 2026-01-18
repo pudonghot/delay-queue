@@ -1,8 +1,10 @@
 package consumer
 
 import (
-	log "github.com/sirupsen/logrus"
+	"log"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestConsumer(t *testing.T) {
@@ -17,9 +19,23 @@ func TestConsumer(t *testing.T) {
 				Tube:     "TEST_TUBE2",
 			},
 		},
+		time.Second*6,
 	)
 
-	c.OnMessage(func(meta EventMata, data []byte) {
+	release := atomic.Bool{}
+
+	c.OnMessage(func(meta EventMata, data []byte) *MsgConsumeResult {
 		log.Printf("endpoint [%s] tube [%s] message [%s].", meta.Endpoint, meta.Tube, string(data))
+		if !release.Load() {
+			log.Printf("Release message.")
+			release.Store(true)
+			return &MsgConsumeResult{
+				ReleaseDelay: time.Second * 6,
+			}
+		}
+		return nil
 	})
+	c.Start()
+	time.Sleep(time.Minute * 2)
+	c.Stop()
 }

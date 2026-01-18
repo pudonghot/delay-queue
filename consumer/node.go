@@ -3,25 +3,17 @@ package consumer
 import (
 	"errors"
 	"github.com/pudonghot/delay-queue/conn"
+	"sync/atomic"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
-	log "github.com/sirupsen/logrus"
-	"github.com/zeromicro/go-zero/core/syncx"
-)
-
-const (
-	reserveTimeout = time.Second * 6
+	log "log/slog"
 )
 
 type Node struct {
-	conn *conn.Conn
-	on   *syncx.AtomicBool
-}
-
-type Service struct {
-	node     *Node
-	listener MessageListener
+	conn           *conn.Conn
+	on             *atomic.Bool
+	reserveTimeout time.Duration
 }
 
 type EventMata struct {
@@ -29,22 +21,25 @@ type EventMata struct {
 	Tube     string
 }
 
-func newConsumerNode(endpoint string, tube string) *Node {
+func newConsumerNode(endpoint string, tube string, reserveTimeout time.Duration) *Node {
+	on := atomic.Bool{}
+	on.Store(true)
 	return &Node{
-		conn: conn.NewConn(endpoint, tube),
-		on:   syncx.ForAtomicBool(true),
+		conn:           conn.NewConn(endpoint, tube),
+		on:             &on,
+		reserveTimeout: reserveTimeout,
 	}
 }
 
-func (c *Node) dispose() {
-	c.on.Set(false)
+func (node *Node) stop() {
+	node.on.Store(false)
 }
 
-func (c *Node) consume(listener MessageListener) {
-	for c.on.True() {
-		conn, err := c.conn.Get()
+func (node *Node) listen(listener MessageListener) {
+	for node.on.Load() {
+		conn, err := node.conn.Get()
 		if err != nil {
-			log.Error(err)
+			log.Error("Beanstalk conn err", log.Any("error", err))
 			time.Sleep(time.Second)
 			continue
 		}
@@ -52,17 +47,26 @@ func (c *Node) consume(listener MessageListener) {
 		// because getting conn takes at most one second, reserve tasks at most 5 seconds,
 		// if don't check on/off here, the conn might not be closed due to
 		// graceful shutdown waits at most 5.5 seconds.
-		if !c.on.True() {
+		if !node.on.Load() {
 			break
 		}
 
-		id, body, err := conn.Reserve(reserveTimeout)
+		id, body, err := conn.Reserve(node.reserveTimeout)
 		if err == nil {
-			conn.Delete(id)
-			listener(EventMata{
-				Endpoint: c.conn.Endpoint,
-				Tube:     c.conn.Tube,
+			result := listener(EventMata{
+				Endpoint: node.conn.Endpoint,
+				Tube:     node.conn.Tube,
 			}, body)
+
+			if result != nil {
+				delay := result.ReleaseDelay
+				if delay >= 0 {
+					conn.Release(id, 2, delay)
+					continue
+				}
+			}
+
+			conn.Delete(id)
 			continue
 		}
 
@@ -87,27 +91,19 @@ func (c *Node) consume(listener MessageListener) {
 				errors.Is(connError.Err, beanstalk.ErrNotIgnored),
 				errors.Is(connError.Err, beanstalk.ErrTooLong):
 				// won't reset
-				log.Error(err)
+				log.Error("Beanstalk consume err", log.Any("error", err))
 			default:
 				// beanstalk.ErrOOM, beanstalk.ErrUnknown and other errors
-				log.Error(err)
-				c.conn.Reset()
+				log.Error("Beanstalk unknown err, conn will be reset", log.Any("error", err))
+				node.conn.Reset()
 				time.Sleep(time.Second)
 			}
 		default:
-			log.Error(err)
+			log.Error("Beanstalk consume err", log.Any("error", err))
 		}
 	}
 
-	if err := c.conn.Close(); err != nil {
-		log.Error(err)
+	if err := node.conn.Close(); err != nil {
+		log.Error("Beanstalk close err", log.Any("error", err))
 	}
-}
-
-func (cs Service) Start() {
-	cs.node.consume(cs.listener)
-}
-
-func (cs Service) Stop() {
-	cs.node.dispose()
 }

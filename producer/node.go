@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"github.com/pudonghot/delay-queue/conn"
 	"github.com/pudonghot/delay-queue/util"
+	log "log/slog"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/beanstalkd/go-beanstalk"
-	log "github.com/sirupsen/logrus"
 )
 
 var ErrTimeBeforeNow = errors.New("can't schedule task to past time")
@@ -104,6 +104,7 @@ func (p *node) Revoke(id string) error {
 func (p *node) delay(data []byte, delay time.Duration) (string, error) {
 	conn, err := p.conn.Get()
 	if err != nil {
+		log.Error("Beanstalk conn err", log.Any("error", err))
 		return "", err
 	}
 
@@ -134,10 +135,11 @@ func (p *node) delay(data []byte, delay time.Duration) (string, error) {
 			// won't reset
 		default:
 			// beanstalk.ErrOOM, beanstalk.ErrTimeout, beanstalk.ErrUnknown and other errors
+			log.Error("Beanstalk unknown err, conn will be reset.", log.Any("error", err))
 			p.conn.Reset()
 		}
 	default:
-		log.Error(err)
+		log.Error("Beanstalk put err", log.Any("error", err))
 	}
 
 	return "", err
